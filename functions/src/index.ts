@@ -121,10 +121,22 @@ export const deleteAccount = onCall(async (request) => {
   batch.delete(db.doc(`users/${uid}`));
   await batch.commit();
 
-  await admin.auth().deleteUser(uid);
+  // A retried request (e.g. the first call timed out client-side after
+  // succeeding) finds the Auth user already gone — treat that as success.
+  try {
+    await admin.auth().deleteUser(uid);
+  } catch (err) {
+    if ((err as { code?: string }).code !== 'auth/user-not-found') throw err;
+  }
 
   return { ok: true };
 });
+
+// Secrets set by piping a file on Windows can carry a UTF-8 BOM or trailing
+// newline, which fetch rejects as an invalid header value.
+function cleanSecret(value: string): string {
+  return value.replace(/^﻿/, '').trim();
+}
 
 const GEMINI_MODEL = 'gemini-flash-latest';
 const MAX_MESSAGE_LENGTH = 1000;
@@ -213,7 +225,7 @@ export const askMoneyCoach = onCall(
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'x-goog-api-key': geminiApiKey.value(),
+          'x-goog-api-key': cleanSecret(geminiApiKey.value()),
         },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: buildCoachSystemPrompt(context) }] },
