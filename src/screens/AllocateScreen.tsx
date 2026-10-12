@@ -3,11 +3,12 @@ import { useNavigation } from '@react-navigation/native';
 import { Animated, Pressable, ScrollView, Text, View } from 'react-native';
 import { inr } from '../lib/finance';
 import { useSalaryWiseContext } from '../lib/SalaryWiseContext';
+import { useRescaleOnBaseChange } from '../lib/useRescaleOnBaseChange';
 import AmountInput from '../components/AmountInput';
 import BackHeader from '../components/BackHeader';
 import DonutChart, { type DonutSegment } from '../components/DonutChart';
 import ScreenTransition from '../components/ScreenTransition';
-import SliderRow from '../components/SliderRow';
+import PercentSliderRow from '../components/PercentSliderRow';
 import { colors } from '../theme/colors';
 
 const ALLOC_BLUE = '#2a78d6';
@@ -44,23 +45,15 @@ export default function AllocateScreen() {
   const { state, actions } = useSalaryWiseContext();
   const { salary, rent, emi, expenses, sip } = state;
 
-  // Salary-decrease self-heal: if lowering salary leaves rent+emi+expenses+sip
-  // summing to more than the new salary, proportionally scale all four down
-  // so the pie never exceeds 100%. Keyed only on salary (not the four fields)
-  // since the headroom-based `max` below already keeps the sum in bounds
-  // during normal slider drags — this effect only needs to react when salary
-  // itself moves the ceiling down.
-  useEffect(() => {
-    const sum = rent + emi + expenses + sip;
-    if (sum > salary && sum > 0) {
-      const scale = salary / sum;
-      actions.setRent(Math.floor((rent * scale) / 1000) * 1000);
-      actions.setEmi(Math.floor((emi * scale) / 1000) * 1000);
-      actions.setExpenses(Math.floor((expenses * scale) / 1000) * 1000);
-      actions.setSip(Math.floor((sip * scale) / 1000) * 1000);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [salary]);
+  // Rent/EMI/Living/SIP are shares of salary — a new salary keeps each
+  // percentage and moves the ₹ amounts with it. Shares sum to ≤100%, so the
+  // pie can't exceed salary after rescaling.
+  useRescaleOnBaseChange(salary, [
+    { value: rent, set: actions.setRent },
+    { value: emi, set: actions.setEmi },
+    { value: expenses, set: actions.setExpenses },
+    { value: sip, set: actions.setSip },
+  ]);
 
   const headroom = Math.max(0, salary - (rent + emi + expenses + sip));
   const rentMax = rent + headroom;
@@ -143,10 +136,10 @@ export default function AllocateScreen() {
         </View>
 
         <View style={{ marginTop: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 18, gap: 22 }}>
-          <SliderRow label="Rent / home EMI" display={inr(rent)} min={0} max={rentMax} step={1000} value={rent} onChange={actions.setRent} />
-          <SliderRow label="Other loan EMIs" display={inr(emi)} min={0} max={emiMax} step={1000} value={emi} onChange={actions.setEmi} />
-          <SliderRow label="Living expenses" display={inr(expenses)} min={0} max={expensesMax} step={1000} value={expenses} onChange={actions.setExpenses} />
-          <SliderRow label="Monthly investing (SIP)" display={inr(sip)} min={0} max={sipMax} step={1000} value={sip} onChange={actions.setSip} />
+          <PercentSliderRow label="Rent / home EMI" base={salary} value={rent} maxAmount={rentMax} onChange={actions.setRent} />
+          <PercentSliderRow label="Other loan EMIs" base={salary} value={emi} maxAmount={emiMax} onChange={actions.setEmi} />
+          <PercentSliderRow label="Living expenses" base={salary} value={expenses} maxAmount={expensesMax} onChange={actions.setExpenses} />
+          <PercentSliderRow label="Monthly investing (SIP)" base={salary} value={sip} maxAmount={sipMax} onChange={actions.setSip} />
         </View>
 
         <Pressable

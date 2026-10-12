@@ -2,9 +2,11 @@ import { useNavigation } from '@react-navigation/native';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { inr, short, taxCalc } from '../lib/finance';
 import { useSalaryWiseContext } from '../lib/SalaryWiseContext';
+import { useRescaleOnBaseChange } from '../lib/useRescaleOnBaseChange';
+import AmountInput from '../components/AmountInput';
 import BackHeader from '../components/BackHeader';
+import PercentSliderRow from '../components/PercentSliderRow';
 import ScreenTransition from '../components/ScreenTransition';
-import SliderRow from '../components/SliderRow';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/fonts';
 
@@ -29,10 +31,20 @@ function RecRow({ rec, index }: { rec: Rec; index: number }) {
   );
 }
 
+const TAX_80C_MAX = 150000;
+const TAX_HRA_MAX = 500000;
+
 export default function TaxScreen() {
   const navigation = useNavigation<any>();
   const { state, actions } = useSalaryWiseContext();
   const { taxIncome, tax80c, taxHra, proUnlocked } = state;
+
+  // 80C and HRA are set as shares of income, so a new income keeps their
+  // percentages — capped at the 80C limit / slider ceiling.
+  useRescaleOnBaseChange(taxIncome, [
+    { value: tax80c, set: actions.setTax80c, max: TAX_80C_MAX },
+    { value: taxHra, set: actions.setTaxHra, max: TAX_HRA_MAX },
+  ]);
 
   if (!proUnlocked) {
     return (
@@ -105,9 +117,9 @@ export default function TaxScreen() {
         </View>
 
         <View style={{ gap: 22, marginTop: 24 }}>
-          <SliderRow label="Annual gross income" display={short(taxIncome)} min={300000} max={5000000} step={50000} value={taxIncome} onChange={actions.setTaxIncome} />
-          <SliderRow label="80C investments" display={short(tax80c)} min={0} max={150000} step={5000} value={tax80c} onChange={actions.setTax80c} />
-          <SliderRow label="HRA + other exemptions" display={short(taxHra)} min={0} max={500000} step={10000} value={taxHra} onChange={actions.setTaxHra} />
+          <AmountInput label="Annual gross income" display={short(taxIncome)} valueColor={colors.green} value={taxIncome} onChange={actions.setTaxIncome} />
+          <PercentSliderRow label="80C investments" base={taxIncome} value={tax80c} maxAmount={TAX_80C_MAX} onChange={actions.setTax80c} format={short} />
+          <PercentSliderRow label="HRA + other exemptions" base={taxIncome} value={taxHra} maxAmount={TAX_HRA_MAX} onChange={actions.setTaxHra} format={short} />
         </View>
 
         <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: colors.borderCard, borderRadius: 18, padding: 18, marginTop: 18 }}>

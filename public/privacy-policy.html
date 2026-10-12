@@ -44,7 +44,7 @@
 <body>
   <div class="wrap">
     <h1>Privacy Policy</h1>
-    <p class="sub">SalaryWise, developed by suryanshu15 — last updated 14 September 2026</p>
+    <p class="sub">SalaryWise, developed by suryanshu15 — last updated 12 October 2026</p>
 
     <p>
       This policy explains what data SalaryWise collects, why, and who it's shared with. SalaryWise is a personal
@@ -77,8 +77,17 @@
 
     <h2>Data security</h2>
     <p>
-      Data is encrypted in transit (HTTPS) between the app, our Cloud Functions, and the third parties above, and
-      encrypted at rest in Firestore.
+      Your financial figures, expense log, and Money Coach chat history are encrypted on your device before they are
+      uploaded, using a key protected by your password. Only encrypted data is stored in Firestore, so neither we nor
+      our infrastructure provider can read it. Your Pro status and whether you've finished setup are stored unencrypted
+      so the app can work. Data is also encrypted in transit (HTTPS) between the app, our Cloud Functions, and the
+      third parties above.
+    </p>
+    <p>
+      If you reset a forgotten password, a device you've already used SalaryWise on keeps a copy of your key in its
+      secure storage and uses it to re-protect your data with the new password the next time you log in. If you reset
+      your password and then log in only on a new device, your previously saved data can't be unlocked and will be
+      cleared. Your Pro purchase is not affected.
     </p>
 
     <h2>Data retention and deletion</h2>

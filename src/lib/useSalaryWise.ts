@@ -1,6 +1,6 @@
 import { getAuth, onAuthStateChanged } from '@react-native-firebase/auth';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { askCoach, type CoachAskContext } from './coach';
 import { addExpense as addExpenseRemote, deleteExpense as deleteExpenseRemote, subscribeExpenses, type ExpenseEntry } from './expenses';
 import { computeScore } from './finance';
@@ -9,6 +9,7 @@ import { cancelScheduledRemoteSave, loadRemoteState, scheduleRemoteSave, subscri
 import { purchasePro as purchaseProFlow } from './payments';
 import { clearState, loadState, saveState } from './storage';
 import { initialState, type AppState, type CityTier } from './types';
+import { clearVault, loadVaultFromDevice, lockVault, subscribeVault } from './vault';
 
 export function useSalaryWise() {
   const [state, setState] = useState<AppState>(initialState);
@@ -23,6 +24,11 @@ export function useSalaryWise() {
   // whether a signed-in user has actually finished onboarding.
   const [remoteLoaded, setRemoteLoaded] = useState(Platform.OS === 'web');
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
+  // uid whose data key is unlocked in memory — remote reads/writes wait on it.
+  const [vaultUid, setVaultUid] = useState<string | null>(null);
+  // uid whose remote profile has finished loading — saves before that point
+  // would overwrite the encrypted profile with local/default state.
+  const remoteReadyUidRef = useRef<string | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -35,6 +41,24 @@ export function useSalaryWise() {
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => subscribeVault(setVaultUid), []);
+
+  // Used when this device can't open the user's encrypted data: a session
+  // carried over from before encryption shipped (no data key yet), or a key
+  // that was replaced by a password reset on another device. Logging in with
+  // the password unlocks (or migrates) the data again.
+  const forceReLogin = useCallback(async () => {
+    lockVault();
+    try {
+      await signOutUser();
+    } catch {
+      // best-effort — the auth listener still ends up signed out on next launch
+    }
+    await clearState();
+    setState(initialState);
+    Alert.alert('Please log in again', 'For your security, log in again to unlock your encrypted data.');
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,7 +77,21 @@ export function useSalaryWise() {
     // from google-services.json/GoogleService-Info.plist at build time, which the
     // web bundle has no equivalent of. Skip auth/Firestore sync entirely on web.
     if (Platform.OS === 'web') return;
-    return onAuthStateChanged(getAuth(), (user) => {
+    let coldStart = true;
+    return onAuthStateChanged(getAuth(), async (user) => {
+      // A persisted session has no password to hand, so the data key must come
+      // from this device. Later callbacks are Login/Signup, which unlock the
+      // vault themselves once sign-in resolves.
+      if (coldStart) {
+        coldStart = false;
+        if (user && !(await loadVaultFromDevice(user.uid))) {
+          await forceReLogin();
+          setUid(null);
+          setEmailVerified(false);
+          setAuthChecked(true);
+          return;
+        }
+      }
       setUid(user?.uid ?? null);
       setEmailVerified(user?.emailVerified ?? false);
       setAuthChecked(true);
@@ -61,10 +99,14 @@ export function useSalaryWise() {
   }, []);
 
   useEffect(() => {
+    remoteReadyUidRef.current = null;
     if (!uid) {
       setRemoteLoaded(true);
       return;
     }
+    // Login/Signup unlock the vault only after Firebase sign-in resolves (which
+    // already fired this effect) — wait for it before reading encrypted data.
+    if (vaultUid !== uid) return;
     setRemoteLoaded(false);
     let cancelled = false;
     loadRemoteState(uid).then((remote) => {
@@ -78,12 +120,17 @@ export function useSalaryWise() {
         // onboarding" — see the `onboarded` checks in Login/VerifyEmail/AppShell).
         scheduleRemoteSave(uid, stateRef.current);
       }
+      remoteReadyUidRef.current = uid;
       setRemoteLoaded(true);
+    }, () => {
+      if (cancelled) return;
+      setRemoteLoaded(true);
+      forceReLogin();
     });
     return () => {
       cancelled = true;
     };
-  }, [uid]);
+  }, [uid, vaultUid, forceReLogin]);
 
   useEffect(() => {
     if (!uid) return;
@@ -93,19 +140,19 @@ export function useSalaryWise() {
   }, [uid]);
 
   useEffect(() => {
-    if (!uid) {
+    if (!uid || vaultUid !== uid) {
       setExpenses([]);
       return;
     }
     return subscribeExpenses(uid, setExpenses);
-  }, [uid]);
+  }, [uid, vaultUid]);
 
   useEffect(() => {
     if (!hydrated) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       saveState(stateRef.current);
-      if (uid) scheduleRemoteSave(uid, stateRef.current);
+      if (uid && remoteReadyUidRef.current === uid) scheduleRemoteSave(uid, stateRef.current);
     }, 400);
     return () => cancelScheduledRemoteSave();
   }, [state, hydrated, uid]);
@@ -212,15 +259,19 @@ export function useSalaryWise() {
 
   const signOut = useCallback(async () => {
     await signOutUser();
+    // Keeps the device copy of the data key so a later password reset can
+    // still be recovered on this device — see unlockVault.
+    lockVault();
     await clearState();
     setState(initialState);
   }, []);
 
   const deleteAccount = useCallback(async () => {
     await deleteAccountRemote();
+    if (uid) await clearVault(uid);
     await clearState();
     setState(initialState);
-  }, []);
+  }, [uid]);
 
   const actions = {
     startScore,

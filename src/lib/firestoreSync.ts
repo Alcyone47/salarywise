@@ -1,5 +1,7 @@
 import { doc, getDoc, getFirestore, onSnapshot, setDoc } from '@react-native-firebase/firestore';
+import { decryptJson, encryptJson } from './crypto';
 import { NON_PERSISTED_KEYS, type AppState } from './types';
+import { getVaultKey } from './vault';
 
 const userDoc = (uid: string) => doc(getFirestore(), 'users', uid);
 
@@ -7,6 +9,10 @@ const userDoc = (uid: string) => doc(getFirestore(), 'users', uid);
 // payment — the client must never write these, or a regular state sync could
 // clobber a real purchase (or the security rule would just reject the write).
 const SERVER_ONLY_KEYS = ['proUnlocked', 'proUnlockedAt'];
+
+// Thrown when users/{uid}.enc can't be opened with this device's data key —
+// the key was replaced after a password reset on another device.
+export class VaultKeyMismatchError extends Error {}
 
 function stripNonPersisted(state: Partial<AppState>): Partial<AppState> {
   const toSave: Partial<AppState> & Record<string, unknown> = { ...state };
@@ -17,18 +23,40 @@ function stripNonPersisted(state: Partial<AppState>): Partial<AppState> {
 }
 
 export async function loadRemoteState(uid: string): Promise<Partial<AppState> | null> {
+  let data: Record<string, unknown> | undefined;
   try {
     const snap = await getDoc(userDoc(uid));
-    if (!snap.exists()) return null;
-    return snap.data() as Partial<AppState>;
+    data = snap.exists() ? (snap.data() as Record<string, unknown>) : undefined;
   } catch {
     return null;
   }
+  // No encrypted profile yet — a brand-new account, or one whose data was
+  // cleared after an unrecoverable password reset.
+  if (typeof data?.enc !== 'string') return null;
+
+  const key = getVaultKey(uid);
+  if (!key) throw new VaultKeyMismatchError('Data key not loaded.');
+  let decrypted: Partial<AppState>;
+  try {
+    decrypted = await decryptJson<Partial<AppState>>(data.enc, key);
+  } catch {
+    throw new VaultKeyMismatchError("This device's data key no longer matches.");
+  }
+  return {
+    ...decrypted,
+    onboarded: Boolean(data.onboarded),
+    proUnlocked: Boolean(data.proUnlocked),
+  };
 }
 
 export async function saveRemoteState(uid: string, state: AppState): Promise<void> {
+  // Never fall back to writing plaintext — without the key there's no save.
+  const key = getVaultKey(uid);
+  if (!key) return;
   try {
-    await setDoc(userDoc(uid), stripNonPersisted(state), { merge: true });
+    const { onboarded, ...sensitive } = stripNonPersisted(state);
+    const enc = await encryptJson(sensitive, key);
+    await setDoc(userDoc(uid), { enc, encVersion: 1, onboarded: Boolean(onboarded) }, { merge: true });
   } catch {
     // best-effort — mirrors saveState's silent-fail contract; the Firestore SDK
     // queues writes made while offline and flushes them once reconnected.

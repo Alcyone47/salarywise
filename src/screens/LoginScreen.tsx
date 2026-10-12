@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSalaryWiseContext } from '../lib/SalaryWiseContext';
-import { resetPassword, signInWithEmail } from '../lib/firebaseAuth';
+import { resetPassword, signInWithEmail, signOutUser } from '../lib/firebaseAuth';
 import { loadRemoteState } from '../lib/firestoreSync';
+import { unlockVault } from '../lib/vault';
 import { getAuth } from '@react-native-firebase/auth';
 import ScreenTransition from '../components/ScreenTransition';
 import { colors } from '../theme/colors';
@@ -56,11 +57,28 @@ export default function LoginScreen() {
     setSending(true);
     try {
       await signInWithEmail(state.email, state.password);
+      const uid = getAuth().currentUser?.uid;
+      if (uid) {
+        let dataReset = false;
+        try {
+          ({ dataReset } = await unlockVault(uid, state.password));
+        } catch {
+          // Signed in but unable to unlock — don't leave a session that can't
+          // read or save its data; a retry runs the whole login again.
+          await signOutUser().catch(() => {});
+          throw new Error("Couldn't unlock your data. Check your connection and try again.");
+        }
+        if (dataReset) {
+          Alert.alert(
+            'Your saved data was reset',
+            "Your password was reset on a device that didn't have your encryption key, so your previous data couldn't be unlocked. Your Pro purchase is unaffected — just set up your profile again."
+          );
+        }
+      }
       if (!getAuth().currentUser?.emailVerified) {
         navigation.navigate('VerifyEmail');
         return;
       }
-      const uid = getAuth().currentUser?.uid;
       const remote = uid ? await loadRemoteState(uid) : null;
       if (remote?.onboarded) {
         navigation.reset({ index: 0, routes: [{ name: 'Main' }] });

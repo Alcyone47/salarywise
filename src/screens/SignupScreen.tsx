@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useSalaryWiseContext } from '../lib/SalaryWiseContext';
-import { signUpWithEmail } from '../lib/firebaseAuth';
+import { getAuth } from '@react-native-firebase/auth';
+import { signOutUser, signUpWithEmail } from '../lib/firebaseAuth';
+import { unlockVault } from '../lib/vault';
 import ScreenTransition from '../components/ScreenTransition';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/fonts';
@@ -38,6 +40,16 @@ export default function SignupScreen() {
     setSending(true);
     try {
       await signUpWithEmail(state.email, state.password);
+      const uid = getAuth().currentUser?.uid;
+      if (uid) {
+        try {
+          // Creates the account's data key and seals it with this password.
+          await unlockVault(uid, state.password);
+        } catch {
+          await signOutUser().catch(() => {});
+          throw new Error("Your account was created, but setup didn't finish. Please log in to continue.");
+        }
+      }
       navigation.navigate('Disclaimer');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');

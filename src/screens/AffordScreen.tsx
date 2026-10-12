@@ -2,6 +2,7 @@ import { useNavigation } from '@react-navigation/native';
 import { ScrollView, Text, View } from 'react-native';
 import { affCalc, inr, short } from '../lib/finance';
 import { useSalaryWiseContext } from '../lib/SalaryWiseContext';
+import AmountInput from '../components/AmountInput';
 import BackHeader from '../components/BackHeader';
 import ScreenTransition from '../components/ScreenTransition';
 import SliderRow from '../components/SliderRow';
@@ -35,7 +36,7 @@ export default function AffordScreen() {
         </View>
 
         <View style={{ gap: 22, marginTop: 24 }}>
-          <SliderRow label="Monthly income" display={inr(affIncome)} min={30000} max={600000} step={5000} value={affIncome} onChange={actions.setAffIncome} />
+          <AmountInput label="Monthly income" display={inr(affIncome)} valueColor={colors.green} value={affIncome} onChange={actions.setAffIncome} />
           <SliderRow label="Down payment saved" display={short(affDown)} min={0} max={10000000} step={100000} value={affDown} onChange={actions.setAffDown} />
           <SliderRow label="Interest rate" display={`${affRate}%`} min={6} max={14} step={0.1} value={affRate} onChange={actions.setAffRate} />
           <SliderRow label="Tenure" display={`${affTenure} years`} min={5} max={30} step={1} value={affTenure} onChange={actions.setAffTenure} />
