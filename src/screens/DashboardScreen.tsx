@@ -5,6 +5,7 @@ import { computeScore, inr, scoreBand, scoreImprovementTips, short } from '../li
 import { useSalaryWiseContext } from '../lib/SalaryWiseContext';
 import Collapsible from '../components/Collapsible';
 import DonutChart, { type DonutSegment } from '../components/DonutChart';
+import ExpandChevron from '../components/ExpandChevron';
 import ScreenTransition from '../components/ScreenTransition';
 import { colors } from '../theme/colors';
 import { fonts } from '../theme/fonts';
@@ -147,7 +148,10 @@ export default function DashboardScreen() {
               <Text style={{ color: colors.ink, fontSize: 12, fontWeight: '800' }}>{band}</Text>
             </View>
           </View>
-          <Text style={{ fontSize: 13, color: colors.greenMuted, marginTop: 8 }}>{dashScoreMsg}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 8 }}>
+            <Text style={{ fontSize: 13, color: colors.greenMuted, flex: 1 }}>{dashScoreMsg}</Text>
+            <ExpandChevron expanded={expanded === 'score'} color={colors.cream} bg="rgba(255,255,255,.12)" />
+          </View>
           <Collapsible expanded={expanded === 'score'}>
             <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,.15)' }}>
               <Text style={{ fontSize: 11, fontWeight: '700', color: colors.greenFaint, letterSpacing: 0.5 }}>SCORE BREAKDOWN</Text>
@@ -205,7 +209,7 @@ export default function DashboardScreen() {
         </Pressable>
 
         <Pressable onPress={() => toggle('summary')} style={{ marginTop: 14, backgroundColor: '#fff', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.borderCard }}>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
+          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 11, color: colors.tan, fontWeight: '600' }}>Earned</Text>
               <Text style={{ fontFamily: fonts.serifSemiBold, fontSize: 22, color: colors.ink, marginTop: 2 }}>{inr(salary)}</Text>
@@ -214,6 +218,7 @@ export default function DashboardScreen() {
               <Text style={{ fontSize: 11, color: colors.tan, fontWeight: '600' }}>Left to spend</Text>
               <Text style={{ fontFamily: fonts.serifSemiBold, fontSize: 22, color: colors.greenLight, marginTop: 2 }}>{inr(Math.max(0, left))}</Text>
             </View>
+            <ExpandChevron expanded={expanded === 'summary'} color={colors.tan} bg={colors.cream} />
           </View>
           <Collapsible expanded={expanded === 'summary'}>
             <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.borderCard }}>
@@ -235,12 +240,15 @@ export default function DashboardScreen() {
             <View style={{ width: pw(emi), backgroundColor: colors.amber, height: '100%' }} />
             <View style={{ width: pw(expenses), backgroundColor: colors.brown, height: '100%' }} />
           </View>
-          <View style={{ flexDirection: 'row', gap: 14, marginTop: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 14, marginTop: 10, alignItems: 'center' }}>
             <Text style={{ fontSize: 11, color: colors.label }}>
               ● Home <Text style={{ fontWeight: '700' }}>{inr(rent)}</Text>
             </Text>
             <Text style={{ fontSize: 11, color: colors.amber }}>● EMI</Text>
             <Text style={{ fontSize: 11, color: colors.brown }}>● Living</Text>
+            <View style={{ marginLeft: 'auto' }}>
+              <ExpandChevron expanded={expanded === 'breakdown'} color={colors.tan} bg={colors.cream} />
+            </View>
           </View>
           <Collapsible expanded={expanded === 'breakdown'}>
             <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.borderCard }}>

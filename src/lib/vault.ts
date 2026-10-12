@@ -1,4 +1,4 @@
-import { collection, deleteField, doc, getDoc, getDocs, getFirestore, setDoc, writeBatch } from '@react-native-firebase/firestore';
+import { collection, deleteField, doc, getDocFromServer, getDocs, getFirestore, setDoc, writeBatch } from '@react-native-firebase/firestore';
 import {
   decryptJson,
   deleteDeviceDek,
@@ -103,7 +103,9 @@ export interface UnlockResult {
 
 // Runs right after a successful sign-in/sign-up, while the password is known.
 export async function unlockVault(uid: string, password: string): Promise<UnlockResult> {
-  const snap = await getDoc(userDoc(uid));
+  // Server read, not cache — a stale or missing cached doc could otherwise look
+  // like a new account or a reset, and both of those overwrite data.
+  const snap = await getDocFromServer(userDoc(uid));
   const data = snap.exists() ? (snap.data() as Record<string, unknown>) : undefined;
   const wrap = data?.keyWrap as KeyWrap | undefined;
 

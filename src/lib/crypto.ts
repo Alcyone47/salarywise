@@ -34,6 +34,27 @@ function fromHex(hex: string): Uint8Array {
   return out;
 }
 
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+// AESSealedData.fromCombined's Android implementation only accepts bytes —
+// a base64 string fails there, so decode it in JS first.
+function fromBase64(b64: string): Uint8Array {
+  const clean = b64.replace(/[^A-Za-z0-9+/]/g, '');
+  const out = new Uint8Array(Math.floor((clean.length * 3) / 4));
+  let buffer = 0;
+  let bits = 0;
+  let j = 0;
+  for (let i = 0; i < clean.length; i++) {
+    buffer = (buffer << 6) | B64.indexOf(clean[i]);
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out[j++] = (buffer >> bits) & 0xff;
+    }
+  }
+  return out;
+}
+
 // JSON with every non-ASCII char escaped as \uXXXX is pure ASCII, so it maps
 // 1:1 to bytes without relying on TextEncoder/TextDecoder being available.
 function jsonToBytes(value: unknown): Uint8Array {
@@ -60,7 +81,7 @@ export async function encryptJson(value: unknown, key: AesKey): Promise<string> 
 
 // Throws if the key is wrong or the data was tampered with (GCM tag check).
 export async function decryptJson<T>(combined: string, key: AesKey): Promise<T> {
-  const bytes = await aesDecryptAsync(AESSealedData.fromCombined(combined), key, { output: 'bytes' });
+  const bytes = await aesDecryptAsync(AESSealedData.fromCombined(fromBase64(combined)), key, { output: 'bytes' });
   return bytesToJson<T>(bytes);
 }
 
@@ -76,16 +97,34 @@ export async function wrapDek(dek: AesKey, password: string): Promise<KeyWrap> {
   return { v: 1, salt: toHex(salt), iters: PBKDF2_ITERATIONS, wrapped: (await sealed.combined('base64')) as string };
 }
 
-// Returns null when the password doesn't open the wrap — after a password
-// reset, the wrap is still sealed with the old password.
+// Encrypts and decrypts a random probe through the same path stored data takes,
+// so a failure to open real data can be blamed on the key, not on this device.
+async function assertRoundTrip(key: AesKey): Promise<void> {
+  const probe = getRandomBytes(16);
+  const sealed = await aesEncryptAsync(probe, key);
+  const combined = (await sealed.combined('base64')) as string;
+  const back = await aesDecryptAsync(AESSealedData.fromCombined(fromBase64(combined)), key, { output: 'bytes' });
+  if (back.length !== probe.length || back.some((b, i) => b !== probe[i])) {
+    throw new Error('Encryption self-test failed.');
+  }
+}
+
+// Returns null only when the password provably doesn't open the wrap — after a
+// password reset, the wrap is still sealed with the old password. Any other
+// failure throws, since callers clear data on null.
 export async function unwrapDek(wrap: KeyWrap, password: string): Promise<AesKey | null> {
+  const kek = await deriveKek(password, fromHex(wrap.salt), wrap.iters);
+  const sealed = AESSealedData.fromCombined(fromBase64(wrap.wrapped));
+  let bytes: Uint8Array;
   try {
-    const kek = await deriveKek(password, fromHex(wrap.salt), wrap.iters);
-    const bytes = await aesDecryptAsync(AESSealedData.fromCombined(wrap.wrapped), kek, { output: 'bytes' });
-    return await AESEncryptionKey.import(bytes);
+    bytes = await aesDecryptAsync(sealed, kek, { output: 'bytes' });
   } catch {
+    // A wrong password and a broken crypto path both fail here — the round
+    // trip tells them apart (and rethrows for the latter).
+    await assertRoundTrip(kek);
     return null;
   }
+  return AESEncryptionKey.import(bytes);
 }
 
 export async function loadDeviceDek(uid: string): Promise<AesKey | null> {

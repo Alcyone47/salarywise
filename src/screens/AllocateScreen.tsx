@@ -136,10 +136,10 @@ export default function AllocateScreen() {
         </View>
 
         <View style={{ marginTop: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 18, gap: 22 }}>
-          <PercentSliderRow label="Rent / home EMI" base={salary} value={rent} maxAmount={rentMax} onChange={actions.setRent} />
-          <PercentSliderRow label="Other loan EMIs" base={salary} value={emi} maxAmount={emiMax} onChange={actions.setEmi} />
-          <PercentSliderRow label="Living expenses" base={salary} value={expenses} maxAmount={expensesMax} onChange={actions.setExpenses} />
-          <PercentSliderRow label="Monthly investing (SIP)" base={salary} value={sip} maxAmount={sipMax} onChange={actions.setSip} />
+          <PercentSliderRow label="Rent / home EMI" base={salary} value={rent} maxAmount={salary} limit={rentMax} onChange={actions.setRent} />
+          <PercentSliderRow label="Other loan EMIs" base={salary} value={emi} maxAmount={salary} limit={emiMax} onChange={actions.setEmi} />
+          <PercentSliderRow label="Living expenses" base={salary} value={expenses} maxAmount={salary} limit={expensesMax} onChange={actions.setExpenses} />
+          <PercentSliderRow label="Monthly investing (SIP)" base={salary} value={sip} maxAmount={salary} limit={sipMax} onChange={actions.setSip} />
         </View>
 
         <Pressable

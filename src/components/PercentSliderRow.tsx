@@ -10,29 +10,39 @@ interface PercentSliderRowProps {
   base: number;
   // Stored in ₹ — the slider and typed value are percentages of `base`.
   value: number;
+  // Where the track ends. Keep it stable — if it moves while another row is
+  // dragged, this row's thumb jumps even though its value didn't change.
   maxAmount: number;
+  // How far the thumb may actually go (e.g. what the other rows leave free).
+  limit?: number;
   onChange: (v: number) => void;
   format?: (n: number) => string;
 }
 
-export default function PercentSliderRow({ label, base, value, maxAmount, onChange, format = inr }: PercentSliderRowProps) {
+export default function PercentSliderRow({ label, base, value, maxAmount, limit, onChange, format = inr }: PercentSliderRowProps) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState('');
+  // Value the slider held when the drag started. While set, it's what the
+  // slider gets as `value`, so React doesn't push a re-rounded value back to
+  // the native thumb under the user's finger (which made it jitter).
+  const [dragStart, setDragStart] = useState<number | null>(null);
 
+  const cap = Math.min(maxAmount, limit ?? Infinity);
   const pct = base > 0 ? (value / base) * 100 : 0;
-  const maxPct = base > 0 ? (maxAmount / base) * 100 : 0;
+  const trackMaxPct = Math.max(1, Math.ceil(base > 0 ? (maxAmount / base) * 100 : 0));
+  // Never below the current value, or the slider would snap it down on render.
+  // Without a `limit` the track end is the cap (setPct clamps the last step).
+  const upperLimitPct = limit === undefined ? undefined : Math.max(Math.round(pct), Math.floor(base > 0 ? (cap / base) * 100 : 0));
 
-  // The slider runs continuously (its max is rarely a whole percent) and is
-  // snapped to whole percents here, capped so rounding up can't pass maxAmount.
   const setPct = (p: number) => {
     const whole = Math.max(0, Math.round(p));
-    onChange(Math.min(maxAmount, Math.round((base * whole) / 100)));
+    onChange(Math.min(cap, Math.round((base * whole) / 100)));
   };
 
   const commit = () => {
     setEditing(false);
     const parsed = parseFloat(text);
-    if (Number.isFinite(parsed)) setPct(Math.min(maxPct, parsed));
+    if (Number.isFinite(parsed)) setPct(parsed);
   };
 
   return (
@@ -56,10 +66,16 @@ export default function PercentSliderRow({ label, base, value, maxAmount, onChan
       </View>
       <Slider
         minimumValue={0}
-        maximumValue={Math.max(maxPct, 1)}
-        step={0}
-        value={pct}
+        maximumValue={trackMaxPct}
+        upperLimit={upperLimitPct}
+        step={1}
+        value={dragStart ?? Math.round(pct)}
+        onSlidingStart={setDragStart}
         onValueChange={setPct}
+        onSlidingComplete={(p) => {
+          setPct(p);
+          setDragStart(null);
+        }}
         disabled={base <= 0}
         minimumTrackTintColor={colors.green}
         maximumTrackTintColor="#e5dcc7"
