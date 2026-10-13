@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { inr } from '../lib/finance';
+import { DELETE_ACCOUNT_URL, PRIVACY_POLICY_URL } from '../lib/links';
 import { useSalaryWiseContext } from '../lib/SalaryWiseContext';
 import BackHeader from '../components/BackHeader';
 import ScreenTransition from '../components/ScreenTransition';
@@ -121,6 +122,16 @@ export default function AccountScreen() {
             </View>
           </View>
         )}
+
+        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 6 }}>
+          <Pressable onPress={() => Linking.openURL(PRIVACY_POLICY_URL)} style={{ padding: 8 }}>
+            <Text style={{ color: colors.inkMuted, fontSize: 13, fontWeight: '600' }}>Privacy policy</Text>
+          </Pressable>
+          <Text style={{ color: colors.inkMuted, fontSize: 13 }}>·</Text>
+          <Pressable onPress={() => Linking.openURL(DELETE_ACCOUNT_URL)} style={{ padding: 8 }}>
+            <Text style={{ color: colors.inkMuted, fontSize: 13, fontWeight: '600' }}>Data deletion</Text>
+          </Pressable>
+        </View>
       </ScreenTransition>
     </ScrollView>
   );

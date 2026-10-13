@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { ActivityIndicator, Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { PRIVACY_POLICY_URL } from '../lib/links';
 import { useSalaryWiseContext } from '../lib/SalaryWiseContext';
 import { getAuth } from '@react-native-firebase/auth';
 import { signOutUser, signUpWithEmail } from '../lib/firebaseAuth';
@@ -109,6 +110,13 @@ export default function SignupScreen() {
           {sending
             ? 'Setting up your secure account — this may take a few minutes. Please keep the app open.'
             : 'Account setup may take a few minutes.'}
+        </Text>
+        <Text style={{ textAlign: 'center', fontSize: 12, color: colors.inkMuted, marginTop: 8, lineHeight: 17 }}>
+          By creating an account you agree to our{' '}
+          <Text style={{ color: colors.greenLight, fontWeight: '700' }} onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}>
+            Privacy Policy
+          </Text>
+          .
         </Text>
         <Text style={{ textAlign: 'center', fontSize: 12.5, color: colors.tanLight, marginTop: 16 }}>
           Already have an account?{' '}
