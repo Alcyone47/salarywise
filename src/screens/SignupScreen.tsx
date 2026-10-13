@@ -105,6 +105,11 @@ export default function SignupScreen() {
         >
           {sending ? <ActivityIndicator color={colors.cream} /> : <Text style={{ color: colors.cream, fontSize: 15, fontWeight: '700' }}>Create account</Text>}
         </Pressable>
+        <Text style={{ textAlign: 'center', fontSize: 12, color: colors.inkMuted, marginTop: 12, lineHeight: 17 }}>
+          {sending
+            ? 'Setting up your secure account — this may take a few minutes. Please keep the app open.'
+            : 'Account setup may take a few minutes.'}
+        </Text>
         <Text style={{ textAlign: 'center', fontSize: 12.5, color: colors.tanLight, marginTop: 16 }}>
           Already have an account?{' '}
           <Text style={{ color: colors.greenLight, fontWeight: '700' }} onPress={() => navigation.navigate('Login')}>

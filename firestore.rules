@@ -4,19 +4,32 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
 
+      // Everything sensitive lives in the encrypted `enc` blob — rejecting any
+      // other key stops builds from before encryption shipped writing plaintext.
+      // Keep in sync with PLAINTEXT_USER_KEYS in src/lib/vault.ts.
+      function onlyEncryptedShape() {
+        return request.resource.data.keys().hasOnly(['onboarded', 'proUnlocked', 'proUnlockedAt', 'keyWrap', 'enc', 'encVersion']);
+      }
+
       // proUnlocked/proUnlockedAt are only ever set by the verifyRazorpayPayment
       // Cloud Function (via the Admin SDK, which bypasses these rules) after it
       // verifies a real payment — clients must not be able to grant themselves Pro.
       allow create: if request.auth != null && request.auth.uid == uid
+        && onlyEncryptedShape()
         && !('proUnlocked' in request.resource.data)
         && !('proUnlockedAt' in request.resource.data);
 
       allow update: if request.auth != null && request.auth.uid == uid
+        && onlyEncryptedShape()
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['proUnlocked', 'proUnlockedAt']);
 
-      // A user's own itemized expense log — fully owned by them, no server-only fields.
+      // A user's own itemized expense log — fully owned by them, no server-only
+      // fields. Each entry is a single encrypted blob.
       match /expenses/{expenseId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+        allow create, update: if request.auth != null && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['enc'])
+          && request.resource.data.enc is string;
       }
     }
 
